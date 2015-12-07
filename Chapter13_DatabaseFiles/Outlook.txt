@@ -1,0 +1,74 @@
+Option Explicit
+' Event handling
+Private WithEvents InboxItems As Outlook.Items
+Private WithEvents SentItems As Outlook.Items
+' Global varaibles
+Dim nsOutlook As Outlook.NameSpace
+Dim db As Database
+Dim rst As Recordset
+' constants
+Const strdbPath = "C:\......\CodeExamples\Chapter12\"
+Const strdbName = "OutlookContacts.accdb"
+Const strTableName = "tblEmailLog"
+
+Private Sub Application_Quit()
+    ' tidy up variables
+    On Error Resume Next
+    rst.Close
+    db.Close
+    Set nsOutlook = Nothing
+End Sub
+
+Private Sub Application_Startup()
+    Set nsOutlook = GetNamespace("MAPI")
+    ' attach our event processing to the InBox and SentMail
+    Set InboxItems = nsOutlook.GetDefaultFolder(olFolderInbox).Items
+    Set SentItems = nsOutlook.GetDefaultFolder(olFolderSentMail).Items
+    ' setup database logging
+    Set db = OpenDatabase(strdbPath & strdbName)
+    Set rst = db.OpenRecordset(strTableName, dbOpenDynaset)
+End Sub
+
+Private Sub InboxItems_ItemAdd(ByVal Item As Object)
+    ' process inbox emails
+    Dim mailOutlook As MailItem
+    Dim rec As Recipient
+    If Item.Class = olMail Then
+        Set mailOutlook = Item
+        With mailOutlook
+            rst.AddNew
+            rst!Subject = Left(.Subject, 255)
+            rst!Body = .Body
+            rst!From = .Sender
+            rst!FromAddress = .SenderEmailAddress
+            rst!Status = "InBox"
+            rst!Logged = .ReceivedTime
+            For Each rec In .Recipients
+               rst!To = rst!To & rec.Name & " : " & rec.Address & ";"
+            Next
+            rst.Update
+        End With
+    End If
+End Sub
+
+Private Sub SentItems_ItemAdd(ByVal Item As Object)
+    ' process outgoing emails
+    Dim mailOutlook As MailItem
+    Dim rec As Recipient
+    If Item.Class = olMail Then
+        Set mailOutlook = Item
+        With mailOutlook
+            rst.AddNew
+            rst!Subject = Left(.Subject, 255)
+            rst!Body = .Body
+            rst!From = .Sender
+            rst!FromAddress = .SenderEmailAddress
+            rst!Status = "Sent"
+            rst!Logged = .SentOn
+            For Each rec In .Recipients
+               rst!To = rst!To & rec.Name & " : " & rec.Address & ";"
+            Next
+            rst.Update
+        End With
+    End If
+End Sub
